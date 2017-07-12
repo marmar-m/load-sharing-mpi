@@ -41,8 +41,10 @@ void test_reshapeIMatrix()
 	
 	printf("*****************************\n");
 	char msgIvector[40];
-	strcat(msgIvector, " test print: "); 
+	strcpy(msgIvector, " test print: "); 
+	
 	printIVector(vect,2*3, msgIvector);
+	printStr(msgIvector);
 	printf("*****************************\n");
 
 	free_ivector(vect);
