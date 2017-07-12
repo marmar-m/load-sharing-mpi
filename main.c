@@ -20,7 +20,7 @@
 #include <time.h>
 #include "matrixUtils.h"
 
-#define MAXARRSIZE  10000
+#define MAXARRSIZE  100
 #define LOAD_TRANSFER_CUTOFF 2
 
 /**
