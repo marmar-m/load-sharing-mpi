@@ -29,6 +29,16 @@
  * @param resultsArr
  * @param arrSize
  */
+void initRanks0(double **xArr, double **resultsArr, int *arrSize)
+{
+
+	*arrSize = rand() % MAXARRSIZE;
+	*xArr = dvector(*arrSize);
+	//createRandDoubleArray(xArr, *arrSize);
+	createUniSpaceDoubleArray(*xArr, *arrSize);
+	*resultsArr = dvector(*arrSize);
+}
+
 void initRanks(double **xArr, double **resultsArr, int *arrSize)
 {
 
@@ -52,7 +62,7 @@ void initRanks(double **xArr, double **resultsArr, int *arrSize)
  * @param transferMatrix : t_ij is number of elements that rank i should receive from rank j
  * @param loadTransferCutoff : Only transfer load if above this value
  */
-void calcRebalencingTransfers(int numProcs, int *initArraySizesAll, int ***transferMatrix)
+void calcRebalencingTransfers(int numProcs, int *initArraySizesAll, int *transferVectorAll)
 {
 	int loadAve; 	
 	loadAve = (int) meanIVector(numProcs, initArraySizesAll);
@@ -110,20 +120,29 @@ void calcRebalencingTransfers(int numProcs, int *initArraySizesAll, int ***trans
 	/*
 	 * Reorder transferMatrix due to initial sorting
 	 */	
+	int **transferMatrix;
 	
-	*transferMatrix = imatrix(numProcs, numProcs);
-	zeroIMatrix(*transferMatrix, numProcs, numProcs);
+	transferMatrix = imatrix(numProcs, numProcs);
+	zeroIMatrix(transferMatrix, numProcs, numProcs);
 	int iRow, iRow_actual;
 	int iCol, iCol_actual;
 	for (iRow = 0; iRow < numProcs; iRow++) {
 		for (iCol = 0; iCol < numProcs; iCol++) {
 			iRow_actual = sortedIndices[iRow];
 			iCol_actual = sortedIndices[iCol];
-			(*transferMatrix)[iRow_actual][iCol_actual] = transferMatrixSorted[iRow][iCol];
+			transferMatrix[iRow_actual][iCol_actual] = transferMatrixSorted[iRow][iCol];
 		}
 	}
 	
-	printf("transferMatrix: \n"); printIMatrix(*transferMatrix, numProcs, numProcs);
+	printf("transferMatrix: \n"); printIMatrix(transferMatrix, numProcs, numProcs);
+	reshapeIMatrix2vect(transferMatrix, transferVectorAll, numProcs, numProcs);
+	//printf("transferVectorAll:  "); 
+/*
+	char vectMsg[40];
+	strcpy(vectMsg, "transferVectorAll:   " );
+	printIVector(transferVectorAll, numProcs * numProcs, vectMsg);
+*/
+	free_imatrix(transferMatrix, numProcs, numProcs);
 	
 	free_imatrix(transferMatrixSorted, numProcs, numProcs);
 	free_ivector(loadOffset);
@@ -162,7 +181,7 @@ void printRankTransferInfo(struct transfer_info transInfo, int myRank)
 				, transInfo.arraySizes2comm[iRank]);
 			strcat(prntMsg, tmpStr);
 		}
-		sprintf(tmpStr, " : total load of size %d", transInfo.totalLoad2transfer);
+		sprintf(tmpStr, " : total = %d", transInfo.totalLoad2transfer);
 		strcat(prntMsg, tmpStr);
 		printf("%s \n", prntMsg);
 
@@ -175,7 +194,7 @@ void printRankTransferInfo(struct transfer_info transInfo, int myRank)
 				transInfo.ranks2comm[iRank]);
 			strcat(prntMsg, tmpStr);
 		}
-		sprintf(tmpStr, " : total load of size %d", -transInfo.totalLoad2transfer);		
+		sprintf(tmpStr, " : total = %d", -transInfo.totalLoad2transfer);		
 		strcat(prntMsg, tmpStr);
 		printf("%s \n", prntMsg);
 		break;
@@ -229,7 +248,7 @@ void calc_local(double *x, double *sin_x, int nArray){
 }
 
 void trasnfer_data2calc(struct transfer_info myTransferInfo, double **extraLoad, 
-	double *localArr, MPI_Request *data2calcReqs, int nArr0myRank)
+	double *localArr, MPI_Request *data2calcReqs, int nArr0myRank, int myRank)
 {
 
 	int iRank;
@@ -245,7 +264,11 @@ void trasnfer_data2calc(struct transfer_info myTransferInfo, double **extraLoad,
 		for (iRank = 0; iRank < myTransferInfo.nTransfers; iRank++) {
 
 			bufferIndex = sumIVector(iRank, myTransferInfo.arraySizes2comm);
-			MPI_Irecv(extraLoad[bufferIndex],
+/*
+			printf("R %d: from %d : extraLoad[bufferIndex] %f",
+				myRank,myTransferInfo.ranks2comm[iRank]);
+*/
+			MPI_Irecv(&((*extraLoad)[bufferIndex]),
 				myTransferInfo.arraySizes2comm[iRank],
 				MPI_DOUBLE,
 				myTransferInfo.ranks2comm[iRank],
@@ -265,7 +288,14 @@ void trasnfer_data2calc(struct transfer_info myTransferInfo, double **extraLoad,
 
 		for (iRank = 0; iRank < myTransferInfo.nTransfers; iRank++) {
 			bufferIndex = -sumIVector(iRank, myTransferInfo.arraySizes2comm);
-
+			
+			char prntMsg[100];
+			sprintf(prntMsg,"R %d:load2send -> %d, (bufferIndex : %d )",
+				myRank, 
+				myTransferInfo.ranks2comm[iRank], bufferIndex );
+			
+			printDVector(&load2send[bufferIndex],-myTransferInfo.arraySizes2comm[iRank],prntMsg);
+			
 			MPI_Isend(&load2send[bufferIndex],
 				-myTransferInfo.arraySizes2comm[iRank],
 				MPI_DOUBLE,
@@ -282,8 +312,45 @@ void trasnfer_data2calc(struct transfer_info myTransferInfo, double **extraLoad,
 	}
 }
 
+void test_reshapeIMatrix()
+{
+	int **testMat;
+	int *vect;
+	testMat = imatrix(2,3);
+	int i,j;
+	for (i = 0; i < 2; i++) {
+		for (j = 0; j < 3; j++) {
+			testMat[i][j] = i*3+j+1;
+		}
+	}
+	printf("*****************************\n");
+	printIMatrix(testMat,2,3);
+	printf("*****************************\n");
+	vect = ivector(6);
+	reshapeIMatrix2vect(testMat,vect,2,3);
+	
+	printf("*****************************\n");
+	char msgIvector[40];
+	strcpy(msgIvector, " test print: "); 
+	
+	printIVector(vect,2*3, msgIvector);
+	printStr(msgIvector);
+	printf("*****************************\n");
+
+	free_ivector(vect);
+	
+}
+
+
+
+/*
 int main(int argc, char**argv)
 {
+	test_reshapeIMatrix();
+	exit(0);
+}
+*/
+int main(int argc, char**argv){
 	int myRank;
 	int numProcs;
 
@@ -299,7 +366,10 @@ int main(int argc, char**argv)
 	int nArr0myRank; // initial size of the array
 	double *localDataArr, *sinAnglesArr;
 	srand(time(NULL) + myRank);  // To get different random numbers on each processor
+	//int	givenArrsizes[5] = {31,   32,    3,   27,   24};
 	initRanks(&localDataArr, &sinAnglesArr, &nArr0myRank);
+	//nArr0myRank = givenArrsizes[myRank];
+	//initRanks(&localDataArr, &sinAnglesArr, nArr0myRank);
 
 	//printf("Hello from proc %d! My initial load is %d \n", myRank, nArr0myRank);
 	//MPI_Barrier(MPI_COMM_WORLD);
@@ -313,26 +383,28 @@ int main(int argc, char**argv)
 	
 	MPI_Gather(&nArr0myRank, 1, MPI_INT, initArraySizesAll, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	if (myRank == 0) {
-		printf(" initial loads: "); 
-		printIVector(initArraySizesAll, numProcs);
+		char msgIvector[40];
+		strcpy(msgIvector, " initial loads"); 
+		printIVector(initArraySizesAll, numProcs, msgIvector);
 	}
 	
 	/*
 	 * Calculate the number of transfers required between ranks for equal balancing
 	 */
 	
-	int **transferMatrix;
-	if (myRank == 0) 
-		calcRebalencingTransfers(numProcs, initArraySizesAll, &transferMatrix);
-	
+	int *transferVectorAll = NULL; 
+	if (myRank == 0) {
+		transferVectorAll = ivector(numProcs * numProcs);		
+		calcRebalencingTransfers(numProcs, initArraySizesAll, transferVectorAll);
+	}
+
 	/*
 	 * Transfer each row of the transferMatrix to a processor
 	 */
-	
 	int *myTrasferArr = ivector(numProcs);
-	MPI_Scatter(*transferMatrix, numProcs , MPI_INT,
+	MPI_Scatter(transferVectorAll, numProcs , MPI_INT,
 		myTrasferArr,numProcs, MPI_INT, 0, MPI_COMM_WORLD);
-		
+	free_ivector(transferVectorAll);		
 	/*
 	 * Redistribute arrays before starting to work
 	 */
@@ -354,17 +426,23 @@ int main(int argc, char**argv)
 		data2calcReqs = (MPI_Request *) malloc(myTransferInfo.nTransfers * sizeof(MPI_Request));
 		data2calcStats = (MPI_Status *) malloc(myTransferInfo.nTransfers * sizeof(MPI_Status));
 
-
+		if (myTransferInfo.rankType == RECEIPIENT) {
+			char vectMssg[100];
+			sprintf(vectMssg, "ExtraLoad buffer before receive %d (size(%d)) :", myRank,
+				myTransferInfo.totalLoad2transfer);
+			printDVector(extraLoad, myTransferInfo.totalLoad2transfer, vectMssg);
+		}
 
 		trasnfer_data2calc(myTransferInfo, &extraLoad, localDataArr, data2calcReqs,
-			nArr0myRank);
+			nArr0myRank, myRank);
 
 
 		MPI_Waitall(myTransferInfo.nTransfers, data2calcReqs, data2calcStats);
 
 		if (myTransferInfo.rankType == RECEIPIENT) {
-			printf("transfered load to %d : ", myRank);
-			printDVector(extraLoad, myTransferInfo.totalLoad2transfer);
+			char vectMssg[200];
+			sprintf(vectMssg,"transfered load to %d : ", myRank);
+			printDVector(extraLoad, myTransferInfo.totalLoad2transfer, vectMssg);
 		}
 
 		free(data2calcReqs);
@@ -373,6 +451,8 @@ int main(int argc, char**argv)
 			free_dvector(extraLoad);
 		}
 	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	/*
 	 * Clean up
@@ -387,7 +467,6 @@ int main(int argc, char**argv)
 
 	if (myRank == 0) {
 		free_ivector(initArraySizesAll);
-		free_imatrix(transferMatrix, numProcs, numProcs);
 	}
 
 	MPI_Finalize(); /* cleanup MPI */

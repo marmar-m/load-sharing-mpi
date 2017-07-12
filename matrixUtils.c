@@ -1,6 +1,7 @@
 /*Utilities for matrices and vectors */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /** Macro for swapping int variables */
 #define SWAPI(a,b)   { int t; t = a; a = b; b = t; }  
@@ -100,6 +101,7 @@ void zeroIMatrix(int **matrix, int rows, int cols) {
     }
 }
 
+/*
 void printIVector(int *ivector, int n)
 {
 	int i;
@@ -108,15 +110,38 @@ void printIVector(int *ivector, int n)
 	}
 	printf("\n");
 }
+*/
 
-
-void printDVector(double *dvector, int n)
+void printIVector(int *ivector, int n, char *msg)
 {
+	char prntMsg[1024];
+	char tmpMsg[1024];
 	int i;
+	strcpy(prntMsg,"");
 	for (i = 0; i < n; i++) {
-		printf("%3.2f ", dvector[i]);
+		sprintf(tmpMsg, "%4d ", ivector[i]);
+		strcat(prntMsg, tmpMsg);
 	}
-	printf("\n");
+	printf("%s%s \n", msg, prntMsg);
+
+}
+
+void printStr(char *msg)
+{
+	printf("%s \n", msg);
+}
+
+void printDVector(double *dvector, int n, char *msg)
+{
+	char prntMsg[1024];
+	char tmpMsg[1024];
+	int i;
+	strcpy(prntMsg,"");
+	for (i = 0; i < n; i++) {
+		sprintf(tmpMsg, "%3.2g ", dvector[i]);
+		strcat(prntMsg, tmpMsg);
+	}
+	printf("%s%s \n",msg, prntMsg);
 }
 
 

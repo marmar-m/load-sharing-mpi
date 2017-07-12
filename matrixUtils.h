@@ -53,10 +53,12 @@ void add_int2ivec(int *vector, int constant, int size, int *sum);
 
 void zeroIMatrix(int **matrix, int rows, int cols);
 
-void printIVector(int *ivector, int n);
+void printIVector(int *ivector, int n, char *msg);
 
-void printDVector(double *dvector, int n);
+void printDVector(double *dvector, int n, char *msg);
  
+void printStr(char *msg);
+
 void printIMatrix(int **imatrix, int nRow, int nCols);
 
 double meanIVector(int arrSize, int *a);

@@ -1,3 +1,4 @@
-/*.o
-/*.o.d
-
+/main.o
+/main.o.d
+/matrixUtils.o
+/matrixUtils.o.d

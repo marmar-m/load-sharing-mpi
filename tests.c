@@ -40,11 +40,17 @@ void test_reshapeIMatrix()
 	reshapeIMatrix2vect(testMat,vect,2,3);
 	
 	printf("*****************************\n");
-	printIVector(vect,2*3);
+	char msgIvector[40];
+	strcat(msgIvector, " test print: "); 
+	printIVector(vect,2*3, msgIvector);
 	printf("*****************************\n");
 
 	free_ivector(vect);
 	
 }
 
-
+int main(int argc, char**argv)
+{
+	test_reshapeIMatrix();
+	exit(0);
+}
