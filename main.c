@@ -24,6 +24,21 @@
 #define MAXARRSIZE  100
 #define LOAD_TRANSFER_CUTOFF 2
 
+enum rank_type {
+	RECEIPIENT = -1,
+	NOCOMM = 0,
+	DONOR = 1
+};
+
+struct transfer_info {
+	int initArraySize;
+	int totalLoad2transfer;
+	int nTransfers;
+	enum rank_type rankType;
+	int *ranks2comm;
+	int *arraySizes2comm;
+};
+
 /**
  * Initialize each rank with an array of random size containing random doubles
  * @param xArr
@@ -35,8 +50,8 @@ void initRanks(double **xArr, double **resultsArr, int *arrSize)
 
 	*arrSize = rand() % MAXARRSIZE;
 	*xArr = dvector(*arrSize);
-	//createRandDoubleArray(xArr, *arrSize);
-	createUniSpaceDoubleArray(*xArr, *arrSize);
+	createRandDoubleArray(*xArr, *arrSize);
+	//createUniSpaceDoubleArray(*xArr, *arrSize);
 	*resultsArr = dvector(*arrSize);
 }
 
@@ -129,21 +144,6 @@ void calcRebalencingTransfers(int numProcs, int *initArraySizesAll, int **transf
 	free_ivector(sortedIndices);
 }
 
-enum rank_type {
-	RECEIPIENT = -1,
-	NOCOMM = 0,
-	DONOR = 1
-};
-
-struct transfer_info {
-	int initArraySize;
-	int totalLoad2transfer;
-	int nTransfers;
-	enum rank_type rankType;
-	int *ranks2comm;
-	int *arraySizes2comm;
-};
-
 void printRankTransferInfo(struct transfer_info transInfo, int myRank)
 {
 	char prntMsg[1024];
@@ -201,6 +201,9 @@ void analyzeRankTransferArray(int *transferArr, int numProcs, struct transfer_in
 		transInfo->rankType = RECEIPIENT;
 	}
 
+	/*
+	 * How many transfers to other ranks?
+	 */
 	int iRank;
 	for (iRank = 0; iRank < numProcs; iRank++) {
 		if (transferArr[iRank] !=0){
@@ -227,6 +230,14 @@ void calc_anglesSines(double *x, double *sin_x, int nArray){
 	}
 }
 
+/**
+ * Send/receive data to other ranks to rebalance load
+ * @param myTransferInfo
+ * @param extraLoad
+ * @param localArr
+ * @param data2calcReqs
+ * @param nArr0myRank
+ */
 void trasnfer_data2calc(struct transfer_info myTransferInfo, double **extraLoad, 
 	double *localArr, MPI_Request *data2calcReqs, int nArr0myRank)
 {
@@ -282,7 +293,7 @@ void trasnfer_data2calc(struct transfer_info myTransferInfo, double **extraLoad,
 }
 
 /**
- * Reverse the data flow down in trasnfer_data2calc above before calculations. 
+ * Reverse the data flow down in trasnfer_data2calc above after done with calculations. 
  * 
  * @param myTransferInfo
  * @param results
@@ -343,6 +354,9 @@ void trasnfer_results2orig(struct transfer_info myTransferInfo, double **results
 void getRankTransferInfo(int myRank, int numProcs, struct transfer_info *myTransferInfo,
 	int myArrayInitSize)
 {
+	/*
+	 * Gather array sizes from all ranks
+	 */
 	int *initArraySizesAll = NULL;
 	if (myRank == 0)
 		initArraySizesAll = ivector(numProcs);
@@ -354,6 +368,10 @@ void getRankTransferInfo(int myRank, int numProcs, struct transfer_info *myTrans
 		printIVector(initArraySizesAll, numProcs, msgIvector);
 	}
 	
+	/*
+	 * Calculate the amount of data that needs to be transferred between ranks to achieve 
+	 * equalized load
+	 */	
 	int **transferMatrix;
 	if (myRank == 0) {
 		transferMatrix = imatrix(numProcs, numProcs);
@@ -374,11 +392,11 @@ void getRankTransferInfo(int myRank, int numProcs, struct transfer_info *myTrans
 	MPI_Scatter(transferArrAll, numProcs, MPI_INT,
 		myTransferArr, numProcs, MPI_INT, 0, MPI_COMM_WORLD);
 
+	
 	analyzeRankTransferArray(myTransferArr, numProcs, myTransferInfo);
 	printRankTransferInfo(*myTransferInfo, myRank);
 
 	free_ivector(myTransferArr);
-
 
 	if (myRank == 0) {
 		free_ivector(initArraySizesAll);
@@ -450,7 +468,7 @@ int main(int argc, char**argv)
 	}
 	
 	/*
-	 * Transfer data to their original ranks
+	 * Transfer data back to their original ranks
 	 */
 	
 	trasnfer_results2orig(myTransferInfo, &extraLoad, sinAnglesArr, dataReqs, nArr0myRank);
@@ -472,8 +490,6 @@ int main(int argc, char**argv)
 	free_dvector(sinAnglesArr);
 	free_ivector(myTransferInfo.arraySizes2comm);
 	free_ivector(myTransferInfo.ranks2comm);
-
-
 
 	free(dataReqs);
 	free(dataStats);
